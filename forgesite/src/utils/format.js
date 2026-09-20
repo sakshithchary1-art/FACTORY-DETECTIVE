@@ -1,4 +1,6 @@
-// Formatting + status color helpers.
+// FORGE SIGHT formatting + status helpers.
+// One source of truth for number presentation: short decimals, K/M compaction,
+// four operational statuses only.
 
 export const fmtInt = (x, fb = '—') =>
   x == null || Number.isNaN(Number(x)) ? fb : Math.round(x).toLocaleString('en-US')
@@ -14,6 +16,16 @@ export const fmtPct = (x, d = 1, fb = '—') =>
 export const fmtSigned = (x, d = 1, suffix = '%') => {
   if (x == null || Number.isNaN(Number(x))) return '—'
   return `${x >= 0 ? '+' : ''}${Number(x).toFixed(d)}${suffix}`
+}
+
+// compact large counts: 1,824 → 1.8K · 54,747 → 54.7K · 1,820,000 → 1.82M
+export const fmtCompact = (x, fb = '—') => {
+  if (x == null || Number.isNaN(Number(x))) return fb
+  const n = Number(x)
+  const abs = Math.abs(n)
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`
+  if (abs >= 1e4) return `${(n / 1e3).toFixed(1)}K`
+  return Math.round(n).toLocaleString('en-US')
 }
 
 export const fmtTime = (ts) => {
@@ -33,22 +45,22 @@ export function greeting() {
   return 'Good evening'
 }
 
-// status → colors (transparent thresholds come from the backend)
+// Four operational statuses only — text + small indicator (heritage palette).
 export const STATUS = {
-  HEALTHY: { text: 'text-green', dot: '#34d399', ring: 'ring-green/40', bg: 'bg-green/10', border: 'border-green/40' },
-  WATCH: { text: 'text-cyan', dot: '#38d9f5', ring: 'ring-cyan/40', bg: 'bg-cyan/10', border: 'border-cyan/40' },
-  WARNING: { text: 'text-amber', dot: '#f5a623', ring: 'ring-amber/40', bg: 'bg-amber/10', border: 'border-amber/40' },
-  CRITICAL: { text: 'text-red', dot: '#f4506c', ring: 'ring-red/40', bg: 'bg-red/10', border: 'border-red/40' },
+  HEALTHY:  { text: 'text-green',  dot: '#405443', label: 'NORMAL' },
+  WATCH:    { text: 'text-amber',  dot: '#A88952', label: 'WATCH' },
+  WARNING:  { text: 'text-amber',  dot: '#a6622b', label: 'ATTENTION' },
+  CRITICAL: { text: 'text-red',    dot: '#6E3B42', label: 'CRITICAL' },
 }
 
 export const statusOf = (s) => STATUS[s] || STATUS.WATCH
 
 // label chips for data honesty
 export const LABELS = {
-  DERIVED: 'border-cyan/40 text-cyan bg-cyan/10',
-  SIMULATED: 'border-purple/40 text-purple bg-purple/10',
-  PROJECTED: 'border-purple/40 text-purple bg-purple/10',
-  PREDICTED: 'border-neon/40 text-neon bg-neon/10',
-  'USER-DEFINED': 'border-amber/40 text-amber bg-amber/10',
-  METHODOLOGY: 'border-line2 text-fog bg-navy-800',
+  DERIVED: 'border-cyan/30 text-cyan bg-cyan/5',
+  SIMULATED: 'border-purple/30 text-purple bg-purple/5',
+  PROJECTED: 'border-purple/30 text-purple bg-purple/5',
+  PREDICTED: 'border-neon/30 text-neon bg-neon/5',
+  'USER-DEFINED': 'border-amber/30 text-amber bg-amber/5',
+  METHODOLOGY: 'border-line2 text-fog bg-navy-850',
 }

@@ -174,7 +174,7 @@ def answer(question: str) -> Dict[str, Any]:
                     util = m["utilization"]
                     q = m["queue_mean"]
                     sources = [m["util_col"]] + m["queue_cols"]
-                    rank_txt = (f" It ranks #{bk['rank']} on the ForgeSite Bottleneck Score "
+                    rank_txt = (f" It ranks #{bk['rank']} on the Forge SIGHT Constraint Risk "
                                 f"({bk['score']:.0f}/100).") if bk else ""
                     msg = (f"{m['name']} runs at {util:.1f}% mean utilization"
                            + (f" with {q:.1f} units accumulated in its queue" if q is not None else "")
@@ -192,8 +192,8 @@ def answer(question: str) -> Dict[str, Any]:
         top = bk.get("top")
         if top:
             return {"available": True,
-                    "answer": (f"The strongest bottleneck signal is {top['name']} — ForgeSite "
-                               f"Bottleneck Score {top['score']:.0f}/100 (utilization "
+                    "answer": (f"The strongest bottleneck signal is {top['name']} — Forge SIGHT "
+                               f"Constraint Risk {top['score']:.0f}/100 (machine usage "
                                f"{top['utilization']:.1f}%, queue {top['queue_mean'] if top['queue_mean'] is not None else 'n/a'}). "
                                "The score is a transparent multi-signal indicator, not a validated metric."),
                     "sources": ["bottleneck engine"], "label": "Retrieved from live dataset analytics"}

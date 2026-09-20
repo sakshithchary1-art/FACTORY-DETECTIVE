@@ -28,28 +28,31 @@ export async function runDemo() {
 
   setDemo(true, 0)
   try {
-    // 1 — Overview: factory status from real KPIs
-    await goto('overview', 2600)
-    logActivity('analysis', 'Demo: factory status reviewed', 'live KPIs')
-    setStep(1); await guard(2200)
+    // 1 — Product Inspection: a REAL image from the supplied dataset
+    await goto('inspect', 1400)
+    window.dispatchEvent(new CustomEvent('fs:demo-run-inspection'))
+    setStep(1); await guard(3400)
+    logActivity('analysis', 'Demo: real product image analyzed', 'supplied image dataset')
 
-    // 2 — Anomaly: overview banner / anomaly engine result
-    setStep(2); await guard(2400)
+    // 2 — Production context + linkage (honest, from live analytics)
+    setStep(2); await guard(2200)
 
-    // 3 — Investigation
-    await goto('investigate', 2800)
-    setStep(3); await guard(2200)
+    // 3 — Overview: factory status from real KPIs
+    await goto('overview', 2400)
+    logActivity('analysis', 'Demo: factory status reviewed', 'live metrics')
+    setStep(3); await guard(2000)
 
-    // 4 — Evidence (same page, timeline step)
-    setStep(4); await guard(2600)
+    // 4 — Anomaly: overview banner / anomaly engine result
+    setStep(4); await guard(2200)
 
-    // 5 — Bottleneck analysis
-    setStep(5); await guard(2200)
+    // 5 — Investigation
+    await goto('investigate', 2600)
+    setStep(5); await guard(2000)
 
-    // 6 — Root-cause associations
-    setStep(6); await guard(2600)
+    // 6 — Evidence + bottleneck analysis (same page, timeline steps)
+    setStep(6); await guard(2400)
 
-    // 7 — What-If Lab
+    // 7 — What-If Test
     await goto('simulate', 2200)
     setStep(7); await guard(1800)
 
@@ -57,19 +60,19 @@ export async function runDemo() {
     setStep(8)
     window.dispatchEvent(new CustomEvent('fs:demo-run-simulation'))
     await guard(3200)
-    logActivity('simulation', 'Demo: projection generated', 'What-If Lab')
+    logActivity('simulation', 'Demo: What-If Test generated', 'projected result')
 
     // 9 — Operational impact
-    setStep(9); await guard(2600)
+    setStep(9); await guard(2400)
 
     // 10 — Report
     setStep(10)
     await goto('reports', 200)
     window.dispatchEvent(new CustomEvent('fs:demo-run-report'))
     await guard(3200)
-    logActivity('report', 'Demo: report generated', 'live dossier')
+    logActivity('report', 'Demo: AI Summary generated', 'live report')
 
-    toast('success', 'Demo complete — anomaly → evidence → bottleneck → projection → decision.')
+    toast('success', 'Demo complete — unusual pattern → evidence → constraint → test → AI Summary.')
   } catch {
     /* user exited early */
   } finally {

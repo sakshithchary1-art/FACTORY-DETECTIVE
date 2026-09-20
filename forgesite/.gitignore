@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Forge SIGHT generated artifacts (never commit secrets or derived data)
+backend/.env
+backend/generated/
+backend/uvicorn*.log*

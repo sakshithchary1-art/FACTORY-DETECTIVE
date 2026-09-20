@@ -1,4 +1,4 @@
-// ForgeSite global store — navigation, live activity feed, demo mode.
+// Forge SIGHT global store — navigation, live activity feed, demo mode.
 
 import { create } from 'zustand'
 

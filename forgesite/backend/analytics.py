@@ -203,7 +203,7 @@ def bottleneck_ranking(weights: Optional[Dict[str, float]] = None) -> Dict[str, 
     ranked.sort(key=lambda x: x["score"], reverse=True)
     return {
         "available": True,
-        "label": "ForgeSite Bottleneck Score",
+        "label": "Forge SIGHT Constraint Risk",
         "note": ("Transparent multi-signal indicator — NOT a scientifically validated metric. "
                  "Weights are configurable in the backend."),
         "weights": w,
@@ -244,6 +244,43 @@ def kpis() -> Dict[str, Any]:
     wait_cols = [c for c in df.columns if c.endswith("_Wait_Time")]
     wait_mean = _num(float(np.mean([df[c].mean() for c in wait_cols])) * 60, 1) if wait_cols else None  # minutes
 
+    # ---- production-flow health (the "flow progress" bar) -----------------
+    # The dataset tracks queues and machine usage, not per-job completion, so a
+    # literal "percent of jobs through the line" does not exist. What CAN be
+    # measured, per main-line stage, is how unimpeded the flow is:
+    #   · congestion-free share — event samples where the stage queue is empty
+    #     (always-empty stages legitimately score 100: material never waits)
+    #   · machine readiness — 100 minus mean machine usage
+    # Flow share = mean of the two; a stage can only score high when material
+    # moves freely AND machines have headroom. Clearly labelled as a derived
+    # flow-health indicator, not a job-completion percentage.
+    stages_flow = []
+    for st in DE.STATIONS:
+        if st["id"] == "FORKLIFT":
+            continue
+        util_col = st["util"]
+        if util_col not in df.columns:
+            continue
+        u = df[util_col].astype(float)
+        readiness = float(100.0 - u.mean() * 100)
+        qcols = [q for q in st["queues"] if q in df.columns]
+        if qcols:
+            acc = pd.Series(np.zeros(len(df)), index=df.index)
+            for q in qcols:
+                acc = acc + df[q].astype(float)
+            free_share = float((acc == 0).mean() * 100)
+        else:
+            free_share = readiness  # no queue signal for this stage
+        flow_pct = _num((free_share + readiness) / 2, 1)
+        stages_flow.append({
+            "id": st["id"], "name": st["name"], "flow_pct": flow_pct,
+            "queue_free_share": _num(free_share, 1),
+            "machine_readiness": _num(readiness, 1),
+            "queue_mean": _num(float(acc.mean()), 2) if qcols else 0.0,
+            "note": "derived flow health: congestion-free share and machine readiness",
+        })
+    flow_overall = _num(float(np.mean([s["flow_pct"] for s in stages_flow])), 1) if stages_flow else None
+
     return {
         "available": True,
         "factory_utilization": _num(factory_util, 1),
@@ -253,6 +290,13 @@ def kpis() -> Dict[str, Any]:
                                "score": top_station["score"]} if top_station else None,
         "waiting_mean_min": wait_mean,
         "queue_fleet": qstats[:8],
+        "flow_progress": {
+            "overall": flow_overall,
+            "stages": stages_flow,
+            "method": ("derived flow health per stage — mean of congestion-free "
+                       "share (event samples with empty queue) and machine "
+                       "readiness (100 − usage). Not a job-completion percentage."),
+        },
     }
 
 

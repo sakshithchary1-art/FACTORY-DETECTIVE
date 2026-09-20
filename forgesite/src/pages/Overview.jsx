@@ -1,21 +1,24 @@
-// Overview — the command center, styled after the reference, powered by real data.
+// Overview — FORGE SIGHT operations screen.
+// Hierarchy: KPI row → production flow (visual anchor) → trend + health →
+// investigation snapshot. Flat lists inside panels; icons only where useful.
 
 import { useEffect, useState } from 'react'
 import {
-  Gauge, Activity, TriangleAlert, Layers, Zap, ArrowRight, Clock,
-  ShieldCheck, GitBranch, FlaskConical, FileText, ScanSearch, Wrench,
+  Activity, TriangleAlert, Zap, ArrowRight, Clock,
+  ShieldCheck, GitBranch, FlaskConical, FileText, ScanSearch,
 } from 'lucide-react'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import { api } from '../services/api'
 import { useStore } from '../store'
-import { Panel, KpiCard, Chip, StatusBadge, ViewDetails, Skeleton, chartTooltipStyle } from '../components/ui'
+import { Panel, KpiCard, Chip, StatusBadge, ViewDetails, Skeleton, SectionTitle, CHART, chartTooltipStyle } from '../components/ui'
+import { CircularProgress, LoadingLine, Term } from '../components/Feedback'
 import { FlowStrip } from '../components/FlowStrip'
-import { fmtInt, fmtNum, fmtPct } from '../utils/format'
+import { fmtInt, fmtCompact, fmtNum, fmtPct } from '../utils/format'
 
 export function Overview() {
-  const { navigate, setSelectedStation, logActivity, backendOnline } = useStore()
+  const { navigate, setSelectedStation, logActivity } = useStore()
   const [kpis, setKpis] = useState(null)
   const [health, setHealth] = useState(null)
   const [stations, setStations] = useState(null)
@@ -44,280 +47,251 @@ export function Overview() {
 
   const bkStation = bk?.top
   const anomaly = inv?.anomaly
-  const healthOrder = ['HEALTHY', 'WATCH', 'WARNING', 'CRITICAL']
+  const healthScore = health?.score ?? 0
+  const healthStatus =
+    healthScore >= 75 ? 'healthy' : healthScore >= 55 ? 'normal' : healthScore >= 35 ? 'warning' : 'critical'
+
+  if (loading && !kpis && !err) {
+    return (
+      <div className="pt-2">
+        <LoadingLine label="Preparing production analysis" className="max-w-md" />
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[92px]" />)}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-5">
-      {/* KPI row */}
+    <div className="space-y-6">
+      {err && <div className="glass border-red/40 px-4 py-3 text-[13px] text-red">{err}</div>}
+
+      {/* 1 — key figures */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          loading={loading} icon={<Gauge size={15} />} tone="cyan"
-          label="FACTORY UTILIZATION"
+          loading={loading}
+          label="Machine Usage"
           value={fmtPct(kpis?.factory_utilization, 1)}
-          sub={`Mean of ${stations?.length || '—'} station utilization fields · Model 3`}
+          sub={`Mean of ${stations?.length || '—'} stations`}
           onClick={() => navigate('flow')}
         />
         <KpiCard
-          loading={loading} icon={<Activity size={15} />} tone="neon"
-          label="THROUGHPUT"
-          value={fmtInt(kpis?.throughput_mean)} unit="products/run"
-          sub="c_TotalProducts mean · 605,620 events"
+          loading={loading}
+          label="Production Rate"
+          value={fmtCompact(kpis?.throughput_mean)}
+          unit="products/run"
+          sub="c_TotalProducts mean"
           onClick={() => navigate('investigate')}
         />
         <KpiCard
-          loading={loading} icon={<Layers size={15} />} tone="purple"
-          label="CRITICAL QUEUE"
-          value={kpis?.critical_queue ? fmtNum(kpis.critical_queue.p95, 0) : '—'} unit="units p95"
+          loading={loading}
+          label="Highest Waiting Area"
+          value={kpis?.critical_queue ? fmtNum(kpis.critical_queue.p95, 0) : '—'}
+          unit="units p95"
           sub={kpis?.critical_queue ? `${kpis.critical_queue.queue} · peak ${fmtInt(kpis.critical_queue.max)}` : ''}
           onClick={() => navigate('investigate')}
         />
         <KpiCard
-          loading={loading} icon={<TriangleAlert size={15} />} tone={bkStation?.score > 60 ? 'red' : 'amber'}
-          label="BOTTLENECK"
+          loading={loading}
+          label="Production Constraint"
           value={bkStation?.name || '—'}
-          sub={bkStation ? `ForgeSite Bottleneck Score ${fmtNum(bkStation.score, 0)}/100` : ''}
+          sub={bkStation ? `Constraint Risk ${fmtNum(bkStation.score, 0)}/100` : ''}
+          tone={bkStation?.score > 60 ? 'red' : 'ink'}
           onClick={() => navigate('investigate')}
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        {/* left/main column */}
-        <div className="space-y-5 xl:col-span-2">
-          {/* production flow */}
-          <Panel
-            title="Production Flow" icon={<GitBranch size={16} />}
-            right={<ViewDetails onClick={() => navigate('flow')} />}
-          >
-            {stations ? (
-              <FlowStrip
-                stations={stations}
-                bottleneckId={bkStation?.id}
-                onSelect={(id) => { setSelectedStation(id); navigate('flow') }}
-                compact
-              />
-            ) : <Skeleton className="h-28" />}
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[10.5px] text-fog">
-              <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: '#34d399' }} /> &lt;70%</span>
-              <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: '#38d9f5' }} /> 70–85%</span>
-              <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: '#f5a623' }} /> 85–95%</span>
-              <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: '#f4506c' }} /> ≥95%</span>
-              <span className="ml-auto italic">Utilization rings · real Model 3 means</span>
-            </div>
-          </Panel>
+      {/* 2 — production flow (visual anchor) */}
+      <section>
+        <SectionTitle
+          title="Production Flow"
+          note="Raw material → Blanking → Press → Assembly → Paint → Quality · values from the Detailed Factory Data"
+          right={<ViewDetails onClick={() => navigate('flow')} label="Open Production" />}
+        />
+        <div className="glass p-3">
+          {stations ? (
+            <FlowStrip
+              stations={stations}
+              bottleneckId={bkStation?.id}
+              onSelect={(id) => { setSelectedStation(id); navigate('flow') }}
+              compact
+              flowProgress={kpis?.flow_progress}
+            />
+          ) : <Skeleton className="h-24" />}
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-1 pt-2 text-[10px] text-fog">
+            <span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full" style={{ background: '#405443' }} /> &lt;70%</span>
+            <span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full" style={{ background: '#A88952' }} /> 70–85%</span>
+            <span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full" style={{ background: '#A6622B' }} /> 85–95%</span>
+            <span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full" style={{ background: '#6E3B42' }} /> ≥95%</span>
+            <span className="ml-auto"><Term tech="Utilization">Machine usage</Term> per station · live means</span>
+          </div>
+        </div>
+      </section>
 
-          {/* anomaly banner */}
-          {anomaly ? (
-            <div className="glass edge-top flex flex-wrap items-center gap-4 border-red/40 bg-gradient-to-r from-red/10 to-purple/10 px-5 py-4 glow-red">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red/20 text-red">
-                <TriangleAlert size={20} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold text-white">
-                  AI detected an anomaly: {anomaly.metric.replace(/_/g, ' ')}
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-mist">
-                  {anomaly.n_anomalies.toLocaleString()} outlier events ({fmtNum(anomaly.anomaly_rate_pct, 2)}% of{' '}
-                  {anomaly.n_total.toLocaleString()}) via the {anomaly.method} method — associated with{' '}
-                  {bkStation?.name || 'a loaded station'} on the bottleneck ranking.
-                </p>
+      {/* 3 — trend + health */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Production Rate Over Time" right={<Chip label="DERIVED" tone="cyan" />}>
+          {trend?.available ? (
+            <>
+              <div style={{ height: CHART.height }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trend.points} margin={{ top: 4, right: 4, left: -4, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="tpGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART.series.blue} stopOpacity={0.14} />
+                        <stop offset="100%" stopColor={CHART.series.blue} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={CHART.grid} strokeDasharray="2 4" vertical={false} />
+                    <XAxis dataKey="t" tick={CHART.tick} stroke={CHART.axis} minTickGap={56} tickFormatter={(v) => fmtCompact(v, '')} />
+                    <YAxis tick={CHART.tick} stroke={CHART.axis} width={46} tickFormatter={(v) => fmtCompact(v, '')} />
+                    <Tooltip contentStyle={chartTooltipStyle()} labelFormatter={(v) => `Event #${fmtInt(v)}`}
+                      formatter={(v) => [fmtInt(v), 'Total products']} />
+                    <Area type="monotone" dataKey="v" stroke={CHART.series.blue} strokeWidth={1.5} fill="url(#tpGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-              <button
-                onClick={() => navigate('investigate')}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-neon to-purple px-4 py-2 text-xs font-semibold text-white glow-neon transition-transform hover:scale-[1.02]"
-              >
-                Investigate <ArrowRight size={13} />
-              </button>
-            </div>
-          ) : loading ? (
-            <Skeleton className="h-20" />
-          ) : null}
+              <p className="mt-1 text-[10.5px] text-fog">Total products across the event stream (downsampled)</p>
+            </>
+          ) : <Skeleton style={{}} className="h-[220px]" />}
+        </Panel>
 
-          {/* trend + health */}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Panel title="Throughput Trend" icon={<Activity size={16} />}
-              right={<Chip label="DERIVED" tone="cyan" />}>
-              {trend?.available ? (
-                <div className="h-52">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trend.points} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="tpGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#4f7cff" stopOpacity={0.5} />
-                          <stop offset="100%" stopColor="#4f7cff" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#1c2444" strokeDasharray="3 6" vertical={false} />
-                      <XAxis dataKey="t" tick={{ fill: '#7d8bb0', fontSize: 9 }} stroke="#293357" tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                      <YAxis tick={{ fill: '#7d8bb0', fontSize: 9 }} stroke="#293357" tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                      <Tooltip contentStyle={chartTooltipStyle()} labelFormatter={(v) => `Event #${v}`}
-                        formatter={(v) => [fmtInt(v), 'Total products']} />
-                      <Area type="monotone" dataKey="v" stroke="#38d9f5" strokeWidth={1.8} fill="url(#tpGrad)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : <Skeleton className="h-52" />}
-              <p className="mt-1.5 text-center text-[10.5px] text-fog">c_TotalProducts across the event stream (downsampled)</p>
-            </Panel>
-
-            <Panel title="Factory Health" icon={<ShieldCheck size={16} />}
-              right={health && <StatusBadge status={health.overall} />}>
-              {health ? (
-                <div className="space-y-3">
-                  <HealthGauge score={health.score} overall={health.overall} />
-                  {Object.entries(health.components).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="text-mist">{k}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="hidden font-mono text-[10px] text-fog md:inline">{componentDetail(health.detail, k)}</span>
+        <Panel title="Factory Health" right={health && <StatusBadge status={health.overall} />}>
+          {health ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <CircularProgress
+                  value={healthScore} size={88}
+                  status={healthStatus}
+                  label="Production Health"
+                />
+                <div className="min-w-0 flex-1">
+                  <ul className="divide-y divide-line">
+                    {Object.entries(health.components).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-3 py-[5px] text-[11.5px]">
+                        <span className="text-mist">{k}</span>
                         <StatusBadge status={v} />
-                      </div>
-                    </div>
-                  ))}
-                  <p className="border-t border-line pt-2 text-[10.5px] leading-relaxed text-fog">
-                    Transparent thresholds: utilization bands at 70/85/95%, queue pressure vs fleet
-                    median, waiting-to-value-added ratio, cycle CV. All derived from Model 3.
-                  </p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ) : <Skeleton className="h-52" />}
-            </Panel>
+              </div>
+              <p className="border-t border-line pt-2 text-[10.5px] leading-relaxed text-fog">
+                Transparent thresholds: usage bands 70/85/95%, waiting vs fleet median,
+                waiting-to-processing ratio, cycle variation. Derived from the Detailed Factory Data.
+              </p>
+            </div>
+          ) : <Skeleton className="h-[220px]" />}
+        </Panel>
+      </div>
+
+      {/* 4 — investigation + actions + activity */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* current issue */}
+        <div className="lg:col-span-2">
+          <SectionTitle title="Current Issue" right={inv && <ViewDetails onClick={() => navigate('investigate')} label="Open investigation" />} />
+          <div className="glass p-4">
+            {inv ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <TriangleAlert size={15} className={inv.severity === 'CRITICAL' ? 'text-red' : 'text-amber'} />
+                    <p className="text-[13.5px] font-semibold text-ink">
+                      {anomaly ? `${anomaly.metric.replace(/_/g, ' ')} outside expected range` : 'No dominant anomaly'}
+                    </p>
+                    <StatusBadge status={inv.severity} />
+                  </div>
+                  <span className="tnum text-[11px] text-fog">{inv.id}</span>
+                </div>
+                {/* evidence chain — short factual rows */}
+                <ul className="divide-y divide-line text-[12px]">
+                  {inv.evidence.slice(0, 5).map((e) => (
+                    <li key={e.label} className="flex items-baseline justify-between gap-3 py-[5px]">
+                      <span className="text-mist">{e.label}</span>
+                      <span className="flex shrink-0 items-baseline gap-2">
+                        <span className="tnum font-semibold text-ink">{e.value}</span>
+                        <span className="hidden text-[10.5px] text-fog md:inline">{e.vs_fleet}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center justify-between border-t border-line pt-2.5">
+                  <p className="text-[11px] text-fog">
+                    Affected station: <span className="font-medium text-mist">{inv.affected_process?.name}</span>
+                    {' · '}{fmtInt(inv.time_period?.records)} events
+                  </p>
+                  <button
+                    onClick={() => navigate('investigate')}
+                    className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold"
+                  >
+                    Find the cause <ArrowRight size={11} />
+                  </button>
+                </div>
+              </div>
+            ) : <Skeleton className="h-48" />}
           </div>
         </div>
 
-        {/* right rail */}
-        <div className="space-y-5">
-          <Panel title="Quick Actions" icon={<Zap size={16} />}>
-            <div className="space-y-2.5">
-              <QuickAction icon={<ScanSearch size={15} />} title="Investigate Anomaly"
-                desc={anomaly ? `${anomaly.metric} flagged` : 'Open the investigation workspace'}
-                onClick={() => navigate('investigate')} />
-              <QuickAction icon={<GitBranch size={15} />} title="Explore Production Flow"
-                desc="13 stations from Model 3"
-                onClick={() => navigate('flow')} />
-              <QuickAction icon={<FlaskConical size={15} />} title="Run Simulation"
-                desc="Project a process change"
-                onClick={() => navigate('simulate')} />
-              <QuickAction icon={<FileText size={15} />} title="Generate Report"
-                desc="Full investigation dossier"
-                onClick={() => navigate('reports')} />
-            </div>
+        {/* right column: actions + activity */}
+        <div className="space-y-4">
+          <Panel title="Quick Actions" icon={<Zap size={13} />}>
+            <ul className="space-y-1">
+              <ActionRow icon={<ScanSearch size={13} />} label="Investigate anomaly" desc={anomaly ? `${anomaly.metric} flagged` : undefined} onClick={() => navigate('investigate')} />
+              <ActionRow icon={<GitBranch size={13} />} label="Explore production" onClick={() => navigate('flow')} />
+              <ActionRow icon={<FlaskConical size={13} />} label="Run a What-If Test" onClick={() => navigate('simulate')} />
+              <ActionRow icon={<FileText size={13} />} label="Generate AI Summary" onClick={() => navigate('reports')} />
+            </ul>
           </Panel>
 
-          <Panel title="Recent Activity" icon={<Clock size={16} />} right={<Chip label="LIVE" tone="green" />}>
+          <Panel title="Recent Activity" icon={<Clock size={13} />}>
             <ActivityFeed />
           </Panel>
 
-          <Panel title="AI Investigation Snapshot" icon={<Wrench size={16} />}
-            right={<ViewDetails onClick={() => navigate('investigate')} label="Open" />}>
-            {inv ? (
-              <div className="space-y-2.5 text-xs">
-                <Row label="Investigation" value={inv.id} />
-                <Row label="Severity" value={
-                  <Chip label={inv.severity} tone={inv.severity === 'CRITICAL' ? 'red' : 'amber'} />
-                } />
-                <Row label="Affected process" value={inv.affected_process?.name || '—'} />
-                <Row label="Confidence" value={fmtPct(inv.confidence, 0)} />
-                <Row label="Anomaly metric" value={anomaly?.metric?.replace(/_/g, ' ') || '—'} />
-                <button
-                  onClick={() => navigate('investigate')}
-                  className="mt-1 w-full rounded-lg border border-neon/40 bg-neon/10 py-2 text-xs font-semibold text-neon transition-colors hover:bg-neon/20"
-                >
-                  OPEN FULL INVESTIGATION →
-                </button>
-              </div>
-            ) : <Skeleton className="h-44" />}
+          <Panel title="Analysis Notes" icon={<ShieldCheck size={13} />}>
+            <ul className="space-y-1.5 text-[11px] leading-relaxed text-fog">
+              <li>Evidence confidence <span className="tnum font-semibold text-mist">{fmtPct(inv?.confidence, 0)}</span> — agreement across independent signals, not a validated classifier score.</li>
+              <li>Constraint ranking uses a transparent multi-signal score (weights configurable in the backend).</li>
+            </ul>
           </Panel>
         </div>
       </div>
-
-      {err && (
-        <div className="glass border-red/40 px-5 py-4 text-sm text-red">
-          {err}
-        </div>
-      )}
-      {backendOnline === false && (
-        <div className="glass border-red/40 px-5 py-4 text-sm text-red">
-          Backend unreachable — start the ForgeSite API: <span className="font-mono">uvicorn main:app --port 8010</span>
-        </div>
-      )}
     </div>
   )
 }
 
-function componentDetail(detail, key) {
-  if (!detail) return ''
-  if (key === 'Queue Pressure') return `p95 max ${fmtNum(detail.queue_p95_max, 0)} · ${fmtNum(detail.queue_ratio_to_median, 1)}× median`
-  if (key === 'Waiting Time') return `wait/VA ratio ${fmtNum(detail.wait_to_va_ratio, 2)}`
-  if (key === 'Cycle Performance') return `cycle CV ${fmtNum(detail.cycle_cv, 2)}`
-  return `util mean ${fmtPct(detail.utilization_mean, 1)}`
-}
-
-export function HealthGauge({ score, overall }) {
-  const color = overall === 'CRITICAL' ? '#f4506c' : overall === 'WARNING' ? '#f5a623'
-    : overall === 'WATCH' ? '#38d9f5' : '#34d399'
-  const C = 2 * Math.PI * 40
+function ActionRow({ icon, label, desc, onClick }) {
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative grid h-24 w-24 place-items-center">
-        <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="#1c2444" strokeWidth="8" />
-          <circle cx="50" cy="50" r="40" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
-            strokeDasharray={`${score / 100 * C} ${C}`} style={{ transition: 'stroke-dasharray 1s ease' }} />
-        </svg>
-        <div className="text-center">
-          <p className="text-xl font-bold" style={{ color }}>{score}</p>
-          <p className="text-[9px] text-fog tracking-wider">/ 100</p>
-        </div>
-      </div>
-      <div>
-        <StatusBadge status={overall} />
-        <p className="mt-1.5 max-w-[180px] text-[10.5px] leading-relaxed text-fog">
-          Composite of flow, utilization, queue, waiting and cycle signals
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function Row({ label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-line/60 pb-2">
-      <span className="text-fog">{label}</span>
-      <span className="text-right font-medium text-white">{value}</span>
-    </div>
-  )
-}
-
-function QuickAction({ icon, title, desc, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-xl border border-line2/70 bg-navy-800/50 px-3.5 py-3 text-left transition-all hover:border-neon/50 hover:bg-navy-800"
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neon/15 text-cyan">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium text-white">{title}</span>
-        <span className="block truncate text-[11px] text-fog">{desc}</span>
-      </span>
-      <ArrowRight size={14} className="shrink-0 text-fog transition-all group-hover:translate-x-0.5 group-hover:text-cyan" />
-    </button>
+    <li>
+      <button
+        onClick={onClick}
+        className="group flex w-full items-center gap-2.5 rounded-md px-2 py-[7px] text-left transition-colors hover:bg-navy-850"
+      >
+        <span className="shrink-0 text-fog">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12.5px] font-medium text-ink">{label}</span>
+          {desc && <span className="block truncate text-[10.5px] text-fog">{desc}</span>}
+        </span>
+        <ArrowRight size={12} className="shrink-0 text-line2 transition-colors group-hover:text-neon" />
+      </button>
+    </li>
   )
 }
 
 function ActivityFeed() {
   const { activity } = useStore()
   if (activity.length === 0) {
-    return <p className="py-4 text-center text-xs text-fog">Interact with ForgeSite — events will appear here in real time.</p>
+    return <p className="py-3 text-center text-[11px] text-fog">Interact with Forge SIGHT — events appear here in real time.</p>
   }
-  const dot = { anomaly: '#f4506c', bottleneck: '#4f7cff', analysis: '#38d9f5', simulation: '#8b5cf6', report: '#34d399' }
+  const dot = { anomaly: '#6E3B42', bottleneck: '#26364A', analysis: '#A88952', simulation: '#6E3B42', report: '#405443' }
   return (
-    <ol className="relative space-y-3.5 pl-4">
-      <span className="absolute inset-y-1 left-[5px] w-px bg-line2" />
+    <ol className="relative space-y-2.5 pl-3.5">
+      <span className="absolute inset-y-1 left-[4px] w-px bg-line" />
       {activity.map((a) => (
-        <li key={a.id} className="relative fade-up">
-          <span className="absolute -left-4 top-1 h-2.5 w-2.5 rounded-full ring-4 ring-navy-900"
-            style={{ background: dot[a.kind] || '#4f7cff' }} />
-          <p className="text-xs font-medium text-mist">{a.title}</p>
-          <p className="text-[10.5px] text-fog">
+        <li key={a.id} className="fade-up relative">
+          <span className="absolute -left-3.5 top-[5px] h-2 w-2 rounded-full ring-2 ring-white"
+            style={{ background: dot[a.kind] || '#26364A' }} />
+          <p className="text-[12px] font-medium text-mist">{a.title}</p>
+          <p className="tnum text-[10px] text-fog">
             {a.detail} · {new Date(a.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </li>

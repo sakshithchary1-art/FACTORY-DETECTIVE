@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -19,8 +19,12 @@ import analytics as AN
 import data_engine as DE
 import forge_ai as FA
 import simulation as SIM
+from services import image_dataset_service as IDS
+from services import vision_service as VS
+from services import manufacturing_service as MS
+from services import investigation_service as INV
 
-app = FastAPI(title="ForgeSite API", version="1.0.0")
+app = FastAPI(title="Forge SIGHT API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=False,
     allow_methods=["*"], allow_headers=["*"],
@@ -61,11 +65,30 @@ class VisionReq(BaseModel):
     image_base64: str = Field(min_length=16, max_length=12_000_000)
 
 
+@app.on_event("startup")
+def startup():
+    """Dataset validation on boot — measured facts only, safe failures."""
+    print("=" * 60)
+    print("Forge SIGHT Dataset Initialization")
+    print("=" * 60)
+    print("Manufacturing Dataset")
+    for i in (1, 2, 3):
+        df = DE.get_model(i)
+        print(f"  Model {i}: {'Loaded' if not df.empty else 'NOT FOUND'}"
+              + (f"  ({len(df):,} rows × {len(df.columns)} cols)" if not df.empty else ""))
+    ok = IDS.load_dataset()   # logs its own image-dataset summary
+    if not ok:
+        print(f"  Image dataset: unavailable — {IDS.unavailable_reason()}")
+    print("System Status")
+    print("  READY" if ok and not DE.get_model(3).empty else "  DEGRADED (see messages above)")
+    print("=" * 60)
+
+
 @app.get("/api/health")
 def health():
     ds = {f"model{i}": not DE.get_model(i).empty for i in (1, 2, 3)}
     return {"status": "ok", "version": "1.0.0", "system": "ONLINE",
-            "datasets": ds, "time": time.time()}
+            "datasets": {**ds, "images": IDS.available()}, "time": time.time()}
 
 
 @app.get("/api/profile/{model_id}")
@@ -244,45 +267,181 @@ def report():
     return FA.build_report()
 
 
+# ---------------------------------------------------------------------------
+# Image dataset + product inspection (real image dataset integration)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/images/summary")
+def images_summary():
+    """Measured dataset statistics — counts, classes, splits, annotations."""
+    s = IDS.get_stats()
+    if not s.get("available"):
+        raise HTTPException(503, s.get("reason", "Image dataset unavailable."))
+    s["linkage"] = IDS.linking_key_summary()
+    return s
+
+
+@app.get("/api/images/classes")
+def image_classes():
+    s = IDS.get_stats()
+    if not s.get("available"):
+        raise HTTPException(503, s.get("reason", "Image dataset unavailable."))
+    return {"classes": s["classes"], "distribution": s["class_distribution"],
+            "unlabeled": s["unlabeled"], "splits": s["splits"]}
+
+
+@app.get("/api/images")
+def images(label: Optional[str] = None, split: Optional[str] = None,
+           search: Optional[str] = None, page: int = 1, page_size: int = 24):
+    r = IDS.query_images(label=label, split=split, search=search,
+                         page=page, page_size=page_size)
+    if not r.get("available"):
+        raise HTTPException(503, r.get("reason", "Image dataset unavailable."))
+    return r
+
+
+@app.get("/api/images/{image_id}")
+def image_detail(image_id: str):
+    try:
+        return IDS.get_image(image_id)
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/images/{image_id}/thumbnail")
+def image_thumbnail(image_id: str):
+    """Resized JPEG preview (cached) — keeps the browser off 287 MB originals."""
+    try:
+        data = IDS.thumbnail_jpeg(image_id)
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if data is None:
+        raise HTTPException(415, "This image could not be converted for preview.")
+    return Response(content=data, media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400",
+                             "ETag": f'"{image_id}"'})
+
+
+@app.get("/api/images/{image_id}/file")
+def image_file(image_id: str):
+    """Original image bytes (read-only, for full-size preview)."""
+    try:
+        rec = IDS.get_image(image_id)
+        data = IDS.image_bytes(image_id)
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    media = f"image/{rec['path'].rsplit('.', 1)[-1].lower().replace('jpg', 'jpeg')}"
+    return Response(content=data, media_type=media,
+                    headers={"Cache-Control": "public, max-age=86400", "ETag": f'"{image_id}"'})
+
+
+@app.get("/api/images/{image_id}/prediction")
+def image_prediction(image_id: str):
+    """Vision analysis for one dataset image (ground truth ≠ prediction)."""
+    try:
+        return VS.analyze_image_record(image_id)
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/images/{image_id}/production-context")
+def image_production_context(image_id: str):
+    """Honest linkage result + live production snapshot for manual association."""
+    try:
+        IDS.get_image(image_id)  # 404 when unknown
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return MS.production_context()
+
+
+@app.get("/api/investigation/{image_id}")
+def image_investigation(image_id: str):
+    """Image → production investigation chain for one real dataset image."""
+    try:
+        return INV.build_investigation(image_id)
+    except KeyError:
+        raise HTTPException(404, "Image not found in the dataset.")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/vision/model-status")
+def vision_model_status():
+    st = VS.model_status()
+    st["dataset"] = {k: IDS.get_stats().get(k) for k in ("available", "total_images", "n_classes", "classes")}
+    return st
+
+
+class TrainReq(BaseModel):
+    max_per_class: int = Field(default=300, ge=20, le=2400)
+
+
+@app.post("/api/vision/train")
+def vision_train(req: TrainReq):
+    """Train the real classifier on the real labeled dataset (held-out metrics)."""
+    try:
+        return VS.train_vision_model(max_per_class=req.max_per_class)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/api/images/analyze")
+def images_analyze(req: VisionReq):
+    """Analyze a user-uploaded image with the real/prototype vision pipeline."""
+    try:
+        return VS.analyze_uploaded(req.image_base64)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    except Exception:
+        raise HTTPException(400, "The provided file could not be read as an image.")
+
+
 @app.post("/api/vision")
 def vision(req: VisionReq):
-    """Honest vision extension slot.
-
-    The supplied dataset contains NO product images, so ForgeSite ships no
-    vision model and never fabricates a verdict. If FORGE_VISION_URL is set,
-    the uploaded image is forwarded to that external model and its response is
-    relayed. Otherwise we say clearly that the module is not connected.
-    """
+    """Upload inspection — external vision model if configured, else the
+    built-in real/prototype pipeline over the dataset's actual classes."""
     import os
     import urllib.request
     import json as _json
 
     url = os.environ.get("FORGE_VISION_URL", "").strip()
-    if not url:
-        return {
-            "connected": False,
-            "message": (
-                "The supplied dataset is discrete-event simulation telemetry and contains no "
-                "product photographs or defect labels — there is nothing to train or evaluate a "
-                "vision model on. ForgeSite therefore does not produce defect verdicts. Connect "
-                "an external computer-vision endpoint to enable this module."
-            ),
-        }
+    if url:
+        try:
+            payload = _json.dumps({"image_base64": req.image_base64}).encode()
+            r = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                body = _json.loads(resp.read().decode())
+            verdict = body.get("verdict", body)
+            return {"connected": True, "verdict": verdict,
+                    "label": "EXTERNAL VISION MODEL"}
+        except Exception:
+            return {
+                "connected": False,
+                "message": "The configured vision endpoint could not be reached or returned an invalid response.",
+            }
     try:
-        payload = _json.dumps({"image_base64": req.image_base64}).encode()
-        r = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(r, timeout=20) as resp:
-            body = _json.loads(resp.read().decode())
-        verdict = body.get("verdict", body)
-        return {"connected": True, "verdict": verdict,
-                "label": "EXTERNAL VISION MODEL"}
+        result = VS.analyze_uploaded(req.image_base64)
+        return {"connected": True, "builtin": True, "result": result}
+    except RuntimeError as e:
+        return {"connected": False, "message": str(e)}
     except Exception:
-        return {
-            "connected": False,
-            "message": "The configured vision endpoint could not be reached or returned an invalid response.",
-        }
+        return {"connected": False,
+                "message": "The provided file could not be read as an image."}
 
 
 @app.exception_handler(Exception)
 async def unhandled(_req, exc):
-    return HTTPException(500, "Internal error — see server logs")
+    from fastapi.responses import JSONResponse
+    print(f"Unhandled error: {exc}")
+    return JSONResponse(status_code=500, content={"detail": "Internal error — see server logs"})

@@ -1,21 +1,36 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   FORGE SIGHT — industrial design system.
+   English-inspired heritage palette: warm ivory surfaces, charcoal type,
+   deep navy actions, muted forest / brass / burgundy status accents.
+   Token NAMES are stable across the project; only the values below carry
+   the palette. 8px spacing grid, 10px radii, flat surfaces, hairlines.
+   ========================================================================== */
+
 @theme {
-  --color-navy-950: #05070f;
-  --color-navy-900: #080b17;
-  --color-navy-850: #0b0f1f;
-  --color-navy-800: #0e1327;
-  --color-navy-700: #151b36;
-  --color-line: #1c2444;
-  --color-line2: #293357;
-  --color-fog: #7d8bb0;
-  --color-mist: #a8b3d4;
-  --color-neon: #4f7cff;
-  --color-cyan: #38d9f5;
-  --color-purple: #8b5cf6;
-  --color-green: #34d399;
-  --color-red: #f4506c;
-  --color-amber: #f5a623;
+  /* surfaces (token names kept for compatibility) */
+  --color-navy-950: #f7f3ea; /* page background — warm ivory */
+  --color-navy-900: #fcfbf8; /* panels — paper white */
+  --color-navy-850: #f1ede4; /* secondary surface — light warm gray */
+  --color-navy-800: #f6f3ec; /* nested surface inside panels */
+  --color-navy-700: #e8e2d6;
+
+  --color-line: #e4ded2;   /* hairline — warm stone */
+  --color-line2: #d8d2c8;  /* stronger border — warm stone */
+
+  /* text */
+  --color-fog: #5f6670;  /* secondary text — slate */
+  --color-mist: #3c434e; /* emphasized text */
+  --color-ink: #252525;  /* primary text — charcoal */
+
+  /* accents — English heritage, no neon, no gradients */
+  --color-neon: #26364a;   /* deep navy — primary actions, info */
+  --color-cyan: #8a7345;   /* muted brass — watch states, subtle highlights */
+  --color-purple: #6e3b42; /* burgundy — projected/simulation labels */
+  --color-green: #405443;  /* muted forest — healthy/normal states */
+  --color-amber: #a6622b;  /* warm amber — attention states */
+  --color-red: #6e3b42;    /* deep burgundy — critical states */
 
   --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
@@ -25,96 +40,107 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(1100px 500px at 85% -10%, rgba(79, 124, 255, 0.08), transparent 60%),
-    radial-gradient(900px 480px at -10% 30%, rgba(139, 92, 246, 0.06), transparent 60%),
-    var(--color-navy-950);
-  color: #dfe6f7;
+  background: var(--color-navy-950);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* ---------- glass panels ---------- */
+/* numerals align in tables, KPIs and charts */
+.tnum, table, .font-mono { font-variant-numeric: tabular-nums; }
+
+/* ---------- panels: flat, hairline-bordered containers ---------- */
 .glass {
-  background: linear-gradient(160deg, rgba(21, 27, 54, 0.55), rgba(11, 15, 31, 0.75));
+  background: var(--color-navy-900);
   border: 1px solid var(--color-line);
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
+  border-radius: 10px;
 }
 
-.glass-hover { transition: border-color .25s, box-shadow .25s, transform .25s; }
+.glass-hover { transition: border-color .15s, box-shadow .15s; }
 .glass-hover:hover {
-  border-color: rgba(79, 124, 255, 0.45);
-  box-shadow: 0 0 24px rgba(79, 124, 255, 0.10), inset 0 0 20px rgba(79, 124, 255, 0.03);
+  border-color: var(--color-line2);
+  box-shadow: 0 1px 4px rgba(37, 37, 37, 0.06);
 }
 
-/* gradient hairline top edge for hero cards */
-.edge-top {
-  position: relative;
-  overflow: hidden;
+/* kept for API compatibility — no decorative gradient edge */
+.edge-top { position: relative; }
+
+/* emphasis classes kept for compatibility, flattened to functional levels */
+.glow-neon, .glow-cyan, .glow-purple { box-shadow: 0 1px 3px rgba(37, 37, 37, 0.07); }
+.glow-red { box-shadow: 0 1px 3px rgba(110, 59, 66, 0.10); }
+.text-glow { text-shadow: none; }
+
+/* ---------- buttons ---------- */
+.btn-primary {
+  background: #26364a; /* deep navy */
+  color: #fcfbf8;
+  border-radius: 8px;
+  transition: background .15s;
 }
-.edge-top::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(79,124,255,.8), rgba(56,217,245,.8), transparent);
-  opacity: .6;
+.btn-primary:hover { background: #1b2a3a; }
+.btn-primary:disabled { opacity: .45; }
+
+.btn-secondary {
+  background: var(--color-navy-900);
+  color: var(--color-mist);
+  border: 1px solid var(--color-line2);
+  border-radius: 8px;
+  transition: border-color .15s, background .15s;
 }
+.btn-secondary:hover { border-color: #b8b0a2; background: var(--color-navy-800); }
 
-/* ---------- glows ---------- */
-.glow-neon { box-shadow: 0 0 22px rgba(79, 124, 255, 0.22), inset 0 0 18px rgba(79, 124, 255, 0.05); }
-.glow-cyan { box-shadow: 0 0 20px rgba(56, 217, 245, 0.18), inset 0 0 14px rgba(56, 217, 245, 0.05); }
-.glow-red  { box-shadow: 0 0 22px rgba(244, 80, 108, 0.22), inset 0 0 16px rgba(244, 80, 108, 0.06); }
-.glow-purple { box-shadow: 0 0 22px rgba(139, 92, 246, 0.25), inset 0 0 16px rgba(139, 92, 246, 0.06); }
-
-.text-glow { text-shadow: 0 0 18px rgba(79, 124, 255, 0.55); }
-
-/* ---------- animations ---------- */
+/* ---------- motion: minimal and functional ---------- */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-up { animation: fade-up .4s ease-out both; }
+.fade-up { animation: fade-up .22s ease-out both; }
 
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
-  50% { opacity: .35; }
+  50% { opacity: .55; }
 }
-.pulse-soft { animation: pulse-soft 2.2s ease-in-out infinite; }
+.pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
 
-@keyframes node-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(79,124,255,.25); }
-  50% { box-shadow: 0 0 0 7px rgba(79,124,255,0); }
-}
-.node-breathe { animation: node-breathe 2.6s ease-out infinite; }
+.node-breathe {}
 
 @keyframes flow-dash { to { stroke-dashoffset: -24; } }
-.flow-line { stroke-dasharray: 5 7; animation: flow-dash 1.5s linear infinite; }
+.flow-line { stroke-dasharray: 4 6; animation: flow-dash 1.6s linear infinite; }
 
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #0d1226 25%, #161d3a 50%, #0d1226 75%);
+  background: linear-gradient(90deg, #f1ede4 25%, #e8e2d6 50%, #f1ede4 75%);
   background-size: 800px 100%;
-  animation: shimmer 1.4s linear infinite;
-  border-radius: 10px;
+  animation: shimmer 1.6s linear infinite;
+  border-radius: 6px;
 }
 
-@keyframes wave-draw {
-  from { stroke-dashoffset: 600; }
-  to { stroke-dashoffset: 0; }
+/* indeterminate loading-line sweep */
+@keyframes loading-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(420%); }
 }
-.wave-draw { stroke-dasharray: 600; animation: wave-draw 2.4s ease-out forwards; }
+.loading-sweep { animation: loading-sweep 1.2s ease-in-out infinite; }
+
+.wave-draw {}
 
 /* ---------- scrollbar ---------- */
-::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1c2444; border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: #293357; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: #d8d2c8; border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #b8b0a2; background-clip: content-box; }
 
-:focus-visible { outline: 2px solid rgba(79,124,255,.6); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 2px solid rgba(38, 54, 74, .55); outline-offset: 1px; border-radius: 4px; }
 
-input[type="range"] { accent-color: #4f7cff; }
+input[type="range"] { accent-color: #26364a; }
+
+@media print {
+  body { background: #ffffff; font-size: 12px; }
+  .glass { box-shadow: none; border-color: #d8d2c8; }
+}
